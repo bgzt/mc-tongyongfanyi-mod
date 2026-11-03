@@ -1,0 +1,20 @@
+pluginManagement {
+    repositories {
+        maven {
+            name = 'Fabric'
+            url = 'https://maven.fabricmc.net/'
+        }
+        // 国内镜像：加速 Maven Central / Gradle 插件门户的依赖解析
+        // 若镜像滞后或不可用，删掉这两个 maven 块即可回退到下方官方源
+        maven {
+            name = 'AliyunPublic'
+            url = 'https://maven.aliyun.com/repository/public'
+        }
+        maven {
+            name = 'AliyunGradlePlugin'
+            url = 'https://maven.aliyun.com/repository/gradle-plugin'
+        }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}

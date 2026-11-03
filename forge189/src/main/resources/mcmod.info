@@ -1,0 +1,13 @@
+[{
+  "modid": "${modid}",
+  "name": "通用翻译 Together",
+  "description": "将服务器发来的英文消息/计分板/物品提示自动翻译成中文，只改客户端显示，不发任何包。使用本机部署的 Ollama 翻译模型离线翻译（自带模型版内含 Qwen2.5 0.5B）。",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "authorList": ["you"],
+  "credits": "",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}]

@@ -1,0 +1,24 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+        maven("https://repo.essential.gg/repository/maven-releases/")
+        maven("https://maven.architectury.dev/")
+        maven("https://maven.fabricmc.net/")
+        maven("https://maven.minecraftforge.net/")
+        maven("https://repo.spongepowered.org/maven/")
+    }
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == "gg.essential.loom") {
+                useModule("gg.essential:architectury-loom:${requested.version}")
+            }
+        }
+    }
+}
+
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.6.0"
+}
+
+rootProject.name = "tongyongfanyi-forge189"

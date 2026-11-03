@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "tongyongfanyi",
+  "version": "${version}",
+  "name": "通用翻译 Together",
+  "description": "将 Hypixel 等服务器发来的英文消息自动翻译成中文，发给服务器的消息保持不变。使用本机部署的翻译模型（Ollama）离线翻译，不上传任何内容；内置本地磁盘缓存，可通过 ModMenu 或在游戏内输入 /tyfy 打开设置界面。",
+  "authors": [
+    "you"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "environment": "client",
+  "mixins": [
+    "tongyongfanyi.mixins.json"
+  ],
+  "entrypoints": {
+    "client": [
+      "com.tongyongfanyi.TongyongfanyiClient"
+    ],
+    "modmenu": [
+      "com.tongyongfanyi.config.ModMenuIntegration"
+    ]
+  },
+  "suggests": {
+    "modmenu": "*"
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": ">=0.161.0"
+  }
+}

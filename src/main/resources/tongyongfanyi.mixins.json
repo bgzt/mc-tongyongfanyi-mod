@@ -1,0 +1,20 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.tongyongfanyi.mixin",
+  "client": [
+    "ItemStackMixin",
+    "BossEventMixin",
+    "EntityRendererMixin",
+    "GuiGraphicsTextMixin",
+    "HudMixin",
+    "ObjectiveMixin",
+    "PlayerScoreEntryMixin",
+    "PlayerTeamMixin",
+    "SelectedItemNameMixin",
+    "TextDisplayRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

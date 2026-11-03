@@ -1,0 +1,147 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+repositories {
+	// 国内镜像：加速 Maven Central 上的依赖（gson、slf4j 等）。
+	// 若镜像不可用，删掉这个 maven 块即可回退官方源。
+	maven {
+		name = 'AliyunPublic'
+		url = 'https://maven.aliyun.com/repository/public'
+	}
+	// Loom 自动添加 Minecraft 和库的 Maven 仓库。
+	// ModMenu 26.3 在 Modrinth Maven 上。
+	maven {
+		name = 'TerraformersMC'
+		url = 'https://maven.terraformersmc.com/releases/'
+	}
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = "Modrinth"
+				url = "https://api.modrinth.com/maven"
+			}
+		}
+		filter {
+			includeGroup "maven.modrinth"
+		}
+	}
+}
+
+loom {
+	// 客户端专用 mod，不拆分 main/client 源集，
+	// 使 src/main/java 可以直接引用客户端 Minecraft 类。
+	mods {
+		"tongyongfanyi" {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+// 与 1.8.9 Forge 版共用的源码（目前只有内置模型安装器 BundledModel）。
+// 共用一份可以避免两边实现漂移 —— 注意它必须保持 Java 8 语法。
+sourceSets {
+	main {
+		java {
+			srcDir 'shared/src/main/java'
+		}
+	}
+}
+
+dependencies {
+	// To change the versions see the gradle.properties file
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	// Fabric API. This is technically optional, but you probably want it anyway.
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// ModMenu (可选依赖：装了就多一个"设置"按钮)
+	implementation "com.terraformersmc:modmenu:${project.modmenu_version}"
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+// ---------------------------------------------------------------------------
+// 内置模型（Qwen2.5 0.5B）
+// ---------------------------------------------------------------------------
+// 把 Ollama 的模型 manifest 与它引用的全部 blob 一起打进 jar，模组首次启动时
+// 原样铺到 Ollama 的 models 目录 —— 这样只装一个 mod 就能离线翻译。
+// 源文件直接取自便携包的 models 目录（保持单一来源，不在工程里再存一份 380MB）。
+// 开发时可用 -PbundleModel=false 跳过打包（产物不含模型）。
+def bundleModel = !project.hasProperty("bundleModel") || project.property("bundleModel") != "false"
+// 不带模型的产物加 -nomodel 后缀：两种 jar 放在同一目录也一眼能分清，重新构建不会互相覆盖。
+if (!bundleModel) {
+	base {
+		archivesName = "${project.archives_base_name}-nomodel"
+	}
+}
+def bundledModelName = "qwen2.5-0.5b"
+def bundledModelsDir = layout.projectDirectory.dir("本地模型包/models")
+// manifest 引用的全部 blob（顺序无所谓，这里按 manifest 里的声明列出）
+def bundledBlobDigests = [
+	"c5396e06af294bd101b30dce59131a76d2b773e76950acc870eda801d3ab0515", // model    397807936
+	"005f95c7475154a17e84b85cd497949d6dd2a4f9d77c096e3c66e4d9c32acaf5", // config         490
+	"66b9ea09bd5b7099cbb4fc820f31b575c0366fa439b08245566692c6784e281e", // system          68
+	"eb4402837c7829a690fa845de4d7f3fd842c2adee476d5341da8a46ea9255175", // template      1482
+	"832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e", // license      11343
+]
+
+jar {
+	from("LICENSE") {
+		rename { "${it}_${project.base.archivesName.get()}" }
+	}
+
+	if (bundleModel) {
+		def bundledManifest = bundledModelsDir.file("manifests/registry.ollama.ai/library/qwen2.5/0.5b")
+		if (!bundledManifest.asFile.exists()) {
+			throw new GradleException("找不到内置模型 manifest: ${bundledManifest.asFile}\n" +
+					"（模型源文件在 本地模型包/models 下；确实不想打包就用 -PbundleModel=false）")
+		}
+		bundledBlobDigests.each { digest ->
+			def blob = bundledModelsDir.file("blobs/sha256-${digest}")
+			if (!blob.asFile.exists()) {
+				throw new GradleException("找不到内置模型 blob: ${blob.asFile}\n" +
+						"（模型源文件在 本地模型包/models 下；确实不想打包就用 -PbundleModel=false）")
+			}
+		}
+		into("tongyongfanyi/bundled/${bundledModelName}") {
+			from(bundledManifest) {
+				rename { "manifest.json" }
+			}
+			bundledBlobDigests.each { digest ->
+				from(bundledModelsDir.file("blobs/sha256-${digest}"))
+			}
+		}
+		// 模型是不可压缩的 GGUF：deflate 既慢又几乎省不下空间。
+		// 整包改为 STORED（不压缩），首次安装就是一次纯字节拷贝，构建也不用去压 380MB。
+		entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
+	}
+}
