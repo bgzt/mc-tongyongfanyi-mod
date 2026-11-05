@@ -60,14 +60,14 @@
 
 **同一个版本里两个 jar 的 modid 相同，只能放一个进 `mods/`，同时放会因 modid 重复启动失败。**
 
-### Fabric 26.3（[Releases v1.4.0](../../releases/tag/v1.4.0)）
+### Fabric 26.3（[Releases v1.4.0](https://github.com/bgzt/mc-tongyongfanyi-mod/releases/tag/v1.4.0)）
 
 | 文件 | 大小 | 什么时候用 |
 |---|---|---|
 | `tongyongfanyi-1.4.0.jar` | 约 **380 MB** | **自带 Qwen2.5 0.5B**。首次进游戏自动把它铺到 Ollama 的 models 目录；换台电脑只需拷这一个文件 |
 | `tongyongfanyi-nomodel-1.4.0.jar` | 约 **79 KB** | **不含模型**。本机已经装了 `qwen2.5:0.5b`（比如用的是便携包的 models 目录）时用它，省 380MB |
 
-### Forge 1.8.9（[Releases forge189-v1.0.0](../../releases/tag/forge189-v1.0.0)）
+### Forge 1.8.9（[Releases forge189-v1.0.0](https://github.com/bgzt/mc-tongyongfanyi-mod/releases/tag/forge189-v1.0.0)）
 
 | 文件 | 大小 | 什么时候用 |
 |---|---|---|
