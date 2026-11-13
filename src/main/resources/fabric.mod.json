@@ -3,7 +3,7 @@
   "id": "tongyongfanyi",
   "version": "${version}",
   "name": "通用翻译 Together",
-  "description": "将 Hypixel 等服务器发来的英文消息自动翻译成中文；只改客户端显示，发给服务器的消息一个字节都不动。翻译范围覆盖聊天、物品提示、Boss 栏、计分板、标题与悬浮文字，内置磁盘缓存与本地词表。翻译后端二选一：在线 API（OpenAI 兼容，DeepSeek / MiMo 等）或本机 Ollama 离线模型。输入 /tyfy 打开设置界面。",
+  "description": "将服务器发来的消息自动翻译成你选定的语言：源语言自动检测，任意语言互译，默认译成简体中文；只改客户端显示，发给服务器的消息一个字节都不动。翻译范围覆盖聊天、物品提示、Boss 栏、计分板、标题与悬浮文字，内置磁盘缓存与本地词表。翻译后端二选一：在线 API（OpenAI 兼容，DeepSeek / MiMo 等）或本机 Ollama 离线模型。输入 /tyfy 打开设置界面。",
   "authors": [
     "不过天",
     "Deepseek"
