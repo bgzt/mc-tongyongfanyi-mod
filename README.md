@@ -35,14 +35,17 @@
 
 ## 安装（v1.5.0 三件套）
 
-把下面三个文件**全部丢进 `mods/`**（官方启动器 `.minecraft/mods/`，PCL 等版本隔离启动器 `.minecraft/versions/<版本>/mods/`）：
+> **只用在线 API？只要一个代码包就够了。**
+> 不下载运行时包和模型包，装上代码包后在设置页选「在线 API」，填好地址（OpenAI 兼容格式，如 DeepSeek、MiMo）、API Key 和模型名即可，无需其他任何文件。
 
-| 包 | 文件 | 版本要求 | 下载 |
-|---|---|---|---|
-| **代码包** | `tongyongfanyi-mc26.2-1.5.0.jar` | Minecraft **26.2** | [Releases v1.5.0](https://github.com/bgzt/mc-tongyongfanyi-mod/releases/tag/v1.5.0) |
-| **代码包** | `tongyongfanyi-mc26.3-1.5.0.jar` | Minecraft **26.3** | [Releases v1.5.0](https://github.com/bgzt/mc-tongyongfanyi-mod/releases/tag/v1.5.0) |
-| **运行时包** | `tongyongfanyi-runtime-windows-x64.zip` | 无要求，跨版本通用 | 同上 |
-| **模型包** | `tongyongfanyi-model-*.zip` | 无要求，跨版本通用 | [模型包仓库](https://github.com/bgzt/mc-tongyongfanyi-models/releases) |
+把下面这些文件**丢进 `mods/`**（官方启动器 `.minecraft/mods/`，PCL 等版本隔离启动器 `.minecraft/versions/<版本>/mods/`）：
+
+| 包 | 文件 | 版本要求 | 下载 | 是否必需 |
+|---|---|---|---|---|
+| **代码包** | `tongyongfanyi-mc26.2-1.5.0.jar` | Minecraft **26.2** | [Releases v1.5.0](https://github.com/bgzt/mc-tongyongfanyi-mod/releases/tag/v1.5.0) | **必需**（二选一） |
+| **代码包** | `tongyongfanyi-mc26.3-1.5.0.jar` | Minecraft **26.3** | [Releases v1.5.0](https://github.com/bgzt/mc-tongyongfanyi-mod/releases/tag/v1.5.0) | **必需**（二选一） |
+| **运行时包** | `tongyongfanyi-runtime-windows-x64.zip` | 无要求，跨版本通用 | 同上 | 仅本地 Ollama 模式需要 |
+| **模型包** | `tongyongfanyi-model-*.zip` | 无要求，跨版本通用 | [模型包仓库](https://github.com/bgzt/mc-tongyongfanyi-models/releases) | 仅本地 Ollama 模式需要 |
 
 - 两个代码包**只能放一个**（modid 相同，同时放会启动失败）。
 - 运行时包 / 模型包只在用**本地 Ollama** 时需要；换 MC 版本不用重新下载。
