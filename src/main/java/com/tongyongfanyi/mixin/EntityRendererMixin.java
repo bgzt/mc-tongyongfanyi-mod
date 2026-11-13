@@ -13,6 +13,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class EntityRendererMixin {
     @Inject(method = "getNameTag", at = @At("RETURN"), cancellable = true)
     private void tyfy$translateNameTag(CallbackInfoReturnable<Component> cir) {
-        cir.setReturnValue(TranslationHelper.translate(cir.getReturnValue()));
+        cir.setReturnValue(TranslationHelper.translateHud(cir.getReturnValue()));
     }
 }

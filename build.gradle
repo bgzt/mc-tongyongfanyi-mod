@@ -6,19 +6,55 @@ plugins {
 version = project.mod_version
 group = project.maven_group
 
+// ---------------------------------------------------------------------------
+// 发行变体：-Pbundle=qwen35q4 | qwen35q8 | qwen35b2 | hymt | none
+// ---------------------------------------------------------------------------
+// 各变体共用同一份代码，区别只在 jar 里内置哪个模型；none 用于开发时快速构建（不带模型和运行时）。
+def variants = [
+	qwen35q4: [suffix: 'qwen35-q4',    id: 'tyfy-qwen35:0.8b', label: 'Qwen3.5 0.8B (Q4)', tag: '0.8b', repo: 'tyfy-qwen35'],
+	// Q3：同参数下比 Q4 再小 ~60MB，手机上内存更宽裕；质量略降，适合低配设备
+	qwen35q3: [suffix: 'qwen35-q3',    id: 'tyfy-qwen35:0.8b-q3', label: 'Qwen3.5 0.8B (Q3)', tag: '0.8b-q3', repo: 'tyfy-qwen35'],
+	qwen35q8: [suffix: 'qwen35-q8',    id: 'tyfy-qwen35:0.8b-q8', label: 'Qwen3.5 0.8B (Q8)', tag: '0.8b-q8', repo: 'tyfy-qwen35'],
+	// 第三版：Qwen3.5 2B Q4（用户要的「一点几 B / 2B 档」；Qwen3.5 没有 1.x B，2B 是 0.8B 之上的同代档）
+	qwen35b2: [suffix: 'qwen35-2b-q4', id: 'tyfy-qwen35:2b',   label: 'Qwen3.5 2B (Q4)',   tag: '2b',   repo: 'tyfy-qwen35'],
+	hymt    : [suffix: 'hymt2-q4',    id: 'tyfy-hymt2:1.8b',  label: 'HY-MT2 1.8B (Q4)',   tag: '1.8b', repo: 'tyfy-hymt2'],
+]
+
+def bundle = (project.findProperty("bundle") ?: "qwen35q4").toString()
+if (bundle != "none" && !variants.containsKey(bundle)) {
+	throw new GradleException("-Pbundle 只能是 ${variants.keySet()} 或 none，收到: ${bundle}")
+}
+def variant = bundle == "none" ? null : variants[bundle]
+
+// ---------------------------------------------------------------------------
+// 目标游戏版本（默认吃 gradle.properties 里的 26.3）
+// ---------------------------------------------------------------------------
+// 给兼容性测试用的覆盖开关，例如打一份 26.2 的包：
+//   ./gradlew build -Pbundle=hymt -Pmcver=26.2 \
+//       -PapiVersion=0.161.0+26.2 -PmodmenuVersion=20.0.3 -ParchiveSuffix=-mc26.2
+// 不传这些参数时行为和以前完全一致（26.3 + 各自的依赖版本）。
+def mcVersion = (project.findProperty("mcver") ?: project.minecraft_version).toString()
+def apiVersion = (project.findProperty("apiVersion") ?: project.fabric_api_version).toString()
+def modmenuVersion = (project.findProperty("modmenuVersion") ?: project.modmenu_version).toString()
+def archiveSuffix = (project.findProperty("archiveSuffix") ?: "").toString()
+// fabric.mod.json 里声明的 fabric-api 版本下限。默认跟构建用的版本一致（去掉 +mc 后缀），
+// 给老版本打包时可以单独指定，免得因为「依赖版本写高了」被加载器直接拒掉。
+def apiDep = (project.findProperty("apiDep") ?: "0.161.0").toString().split("\\+")[0]
+if (mcVersion != project.minecraft_version) {
+	logger.lifecycle("目标游戏版本覆盖为 ${mcVersion}（api ${apiVersion} / modmenu ${modmenuVersion}）")
+}
+
 base {
-	archivesName = project.archives_base_name
+	archivesName = (variant == null ? project.archives_base_name : "${project.archives_base_name}-${variant.suffix}") + archiveSuffix
 }
 
 repositories {
 	// 国内镜像：加速 Maven Central 上的依赖（gson、slf4j 等）。
-	// 若镜像不可用，删掉这个 maven 块即可回退官方源。
 	maven {
 		name = 'AliyunPublic'
 		url = 'https://maven.aliyun.com/repository/public'
 	}
-	// Loom 自动添加 Minecraft 和库的 Maven 仓库。
-	// ModMenu 26.3 在 Modrinth Maven 上。
+	// ModMenu 在 TerraformersMC 与 Modrinth 上。
 	maven {
 		name = 'TerraformersMC'
 		url = 'https://maven.terraformersmc.com/releases/'
@@ -46,7 +82,7 @@ loom {
 	}
 }
 
-// 与 1.8.9 Forge 版共用的源码（目前只有内置模型安装器 BundledModel）。
+// 与 1.8.9 Forge 版共用的源码（内置模型安装器 BundledModel）。
 // 共用一份可以避免两边实现漂移 —— 注意它必须保持 Java 8 语法。
 sourceSets {
 	main {
@@ -57,24 +93,23 @@ sourceSets {
 }
 
 dependencies {
-	// To change the versions see the gradle.properties file
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-
+	minecraft "com.mojang:minecraft:${mcVersion}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-	// Fabric API. This is technically optional, but you probably want it anyway.
-	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-
+	implementation "net.fabricmc.fabric-api:fabric-api:${apiVersion}"
 	// ModMenu (可选依赖：装了就多一个"设置"按钮)
-	implementation "com.terraformersmc:modmenu:${project.modmenu_version}"
+	implementation "com.terraformersmc:modmenu:${modmenuVersion}"
 }
 
 processResources {
 	def version = project.version
 	inputs.property "version", version
+	// 目标游戏版本也要声明成输入：换 -Pmcver 后必须重新展开 fabric.mod.json，
+	// 否则 26.2 的包里会留着 "minecraft": "~26.3"，加载时直接被拒。
+	inputs.property "mcVersion", mcVersion
+	inputs.property "apiDep", apiDep
 
 	filesMatching("fabric.mod.json") {
-		expand "version": version
+		expand "version": version, "mcDep": mcVersion, "apiDep": apiDep
 	}
 }
 
@@ -90,58 +125,310 @@ java {
 }
 
 // ---------------------------------------------------------------------------
-// 内置模型（Qwen2.5 0.5B）
+// 内置模型信息的生成（写进 jar 的 tongyongfanyi/model.properties）
 // ---------------------------------------------------------------------------
-// 把 Ollama 的模型 manifest 与它引用的全部 blob 一起打进 jar，模组首次启动时
-// 原样铺到 Ollama 的 models 目录 —— 这样只装一个 mod 就能离线翻译。
-// 源文件直接取自便携包的 models 目录（保持单一来源，不在工程里再存一份 380MB）。
-// 开发时可用 -PbundleModel=false 跳过打包（产物不含模型）。
-def bundleModel = !project.hasProperty("bundleModel") || project.property("bundleModel") != "false"
-// 不带模型的产物加 -nomodel 后缀：两种 jar 放在同一目录也一眼能分清，重新构建不会互相覆盖。
-if (!bundleModel) {
-	base {
-		archivesName = "${project.archives_base_name}-nomodel"
+def modelInfoDir = layout.buildDirectory.dir("generated/model-info")
+def generateModelInfo = tasks.register("generateModelInfo") {
+	// 必须把变体声明成输入，否则换 -Pbundle 时 Gradle 会认为任务是最新的，
+	// 直接把上一个变体的 model.properties 留进 jar（Q8/混元版带着 Q4 的模型名）。
+	inputs.property("bundledModelName", variant == null ? "none" : variant.id)
+	inputs.property("bundledModelLabel", variant == null ? "无内置模型" : variant.label)
+	outputs.dir(modelInfoDir)
+	doLast {
+		def props = modelInfoDir.get().file("tongyongfanyi/model.properties").asFile
+		props.parentFile.mkdirs()
+		if (variant == null) {
+			props.text = "id=none\nname=none\nlabel=无内置模型\n"
+		} else {
+			props.text = "id=tongyongfanyi-model-${variant.suffix}\nname=${variant.id}\nlabel=${variant.label}\n"
+		}
 	}
 }
-def bundledModelName = "qwen2.5-0.5b"
-def bundledModelsDir = layout.projectDirectory.dir("本地模型包/models")
-// manifest 引用的全部 blob（顺序无所谓，这里按 manifest 里的声明列出）
-def bundledBlobDigests = [
-	"c5396e06af294bd101b30dce59131a76d2b773e76950acc870eda801d3ab0515", // model    397807936
-	"005f95c7475154a17e84b85cd497949d6dd2a4f9d77c096e3c66e4d9c32acaf5", // config         490
-	"66b9ea09bd5b7099cbb4fc820f31b575c0366fa439b08245566692c6784e281e", // system          68
-	"eb4402837c7829a690fa845de4d7f3fd842c2adee476d5341da8a46ea9255175", // template      1482
-	"832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e", // license      11343
-]
+sourceSets.main.resources.srcDir(generateModelInfo)
+
+// ---------------------------------------------------------------------------
+// 内置运行时 + 模型的 payload.zip
+// ---------------------------------------------------------------------------
+// jar 里带的是「Ollama 运行时（CPU + Vulkan）+ 模型（manifest + blobs）」，
+// 首次启动解到 <游戏目录>/tongyongfanyi/ 下。整包 STORED 存放：
+// 模型是不可压缩的 GGUF，压缩只会让构建慢上几分钟。
+def modelsDir = layout.projectDirectory.dir("本地模型包/models")
+
+// ---------------------------------------------------------------------------
+// Ollama 运行时（独立运行时包）
+// ---------------------------------------------------------------------------
+// 运行时必须按平台分：Windows x64 的 ollama.exe + .dll 在 Android ARM64 上跑不了，
+// 混在一个包里就只能选定一个平台。拆成独立 zip 后，同一份代码包配不同运行时包
+// 就能覆盖电脑和手机，玩家把两个包都丢进 mods/，模组自己挑当前平台那个。
+//
+//   ./gradlew runtimePack -PrtPlatform=windows-x64
+//   ./gradlew runtimePack -PrtPlatform=android-arm64 -PrtDir=<ARM64 ollama 目录>
+def rtPlatform = (project.findProperty("rtPlatform") ?: "windows-x64").toString()
+if (!(rtPlatform ==~ /(windows|android|linux|macos)-(x64|arm64|x86|arm|any)/)) {
+	throw new GradleException("-PrtPlatform 形如 windows-x64 / android-arm64 / linux-x64，收到: ${rtPlatform}")
+}
+def rtPlatformName = rtPlatform.substring(0, rtPlatform.indexOf('-'))
+def rtArchName = rtPlatform.substring(rtPlatform.indexOf('-') + 1)
+def rtDirProp = project.findProperty("rtDir")
+def runtimeDir = rtDirProp != null
+		? layout.projectDirectory.dir(rtDirProp.toString())
+		: (rtPlatformName == "windows"
+		? layout.projectDirectory.dir("本地模型包/ollama")
+		: layout.projectDirectory.dir("本地模型包/ollama-${rtPlatform}"))
+// Windows 的可执行文件带 .exe，其它平台不带
+def rtExeName = rtPlatformName == "windows" ? "ollama.exe" : "ollama"
+def rtLabel = [
+		"windows-x64"  : "Ollama · Windows x64",
+		"windows-arm64": "Ollama · Windows ARM64",
+		"android-arm64": "Ollama · Android ARM64",
+		"linux-x64"    : "Ollama · Linux x64",
+		"linux-arm64"  : "Ollama · Linux ARM64",
+		"macos-arm64"  : "Ollama · macOS ARM64",
+		"macos-x64"    : "Ollama · macOS x64",
+].getOrDefault(rtPlatform, "Ollama · ${rtPlatform}")
+// 代码包是否把运行时也塞进去（默认不塞，保持几 MB；老流程用 -PembedRuntime=true 复现）
+def embedRuntime = (project.findProperty("embedRuntime") ?: "false").toString().toBoolean()
+
+def manifestRel = null
+def blobNames = []
+if (variant != null) {
+	manifestRel = "manifests/registry.ollama.ai/library/${variant.repo}/${variant.tag}".toString()
+	def manifestFile = modelsDir.file(manifestRel).asFile
+	if (!manifestFile.isFile()) {
+		throw new GradleException("找不到内置模型 manifest: ${manifestFile}\n" +
+				"（先用 ollama 把 ${variant.id} 准备好，再构建）")
+	}
+	def json = new groovy.json.JsonSlurper().parse(manifestFile)
+	def entries = [json.config] + json.layers
+	blobNames = entries.collect { "sha256-" + it.digest.toString().split(":")[1] }
+	def runtimeExe = runtimeDir.file(rtExeName).asFile
+	if (!runtimeExe.isFile()) {
+		throw new GradleException("找不到内置运行时: ${runtimeExe}\n" +
+				"（-PrtPlatform=${rtPlatform} 对应的目录不存在，用 -PrtDir 指定，或改回 windows-x64）")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 拆分模式：代码包带 Ollama 运行时，模型包只带模型
+// ---------------------------------------------------------------------------
+// 运行时固定在代码包里（约 100 MB）：玩家不用另装 Ollama，离线开箱即用；
+// 模型包不含任何 MC/Fabric/Forge 字段，换加载器、换游戏版本都不用重做。
+def stageRuntime = tasks.register("stageRuntime", Sync) {
+	into layout.buildDirectory.dir("runtime-stage")
+	doFirst {
+		delete layout.buildDirectory.dir("runtime-stage")
+	}
+	from(runtimeDir.file(rtExeName)) {
+		into "ollama"
+	}
+	// Windows 的 Ollama 把 llama-server 等放在 lib/ollama；Linux/Android 版是 .so
+	def rtLibDir = runtimeDir.dir("lib/ollama").asFile
+	if (rtLibDir.isDirectory()) {
+		from(rtLibDir) {
+			include "*.dll", "*.exe", "*.so", "*.so.*"
+			into "ollama/lib/ollama"
+		}
+	}
+	def rtVulkanDir = runtimeDir.dir("lib/ollama/vulkan").asFile
+	if (rtVulkanDir.isDirectory()) {
+		from(rtVulkanDir) {
+			into "ollama/lib/ollama/vulkan"
+		}
+	}
+}
+
+def runtimeZip = tasks.register("runtimeZip", Zip) {
+	dependsOn stageRuntime
+	from layout.buildDirectory.dir("runtime-stage")
+	archiveFileName = "runtime.zip"
+	destinationDirectory = layout.buildDirectory.dir("runtime")
+	entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
+}
+
+// ---------------------------------------------------------------------------
+// 运行时包：通用 zip（不含 fabric.mod.json），一个平台一个包
+// ---------------------------------------------------------------------------
+// 和模型包一样是「纯资源容器」：Fabric/Forge 都不认它，只有本模组会读。
+// 文件名必须保持 tongyongfanyi-runtime-<platform>.zip，模组按这个前缀扫描。
+def runtimePackMeta = layout.buildDirectory.dir("generated/runtime-pack-meta")
+def generateRuntimePackMeta = tasks.register("generateRuntimePackMeta") {
+	inputs.property("rtPlatform", rtPlatform)
+	inputs.property("rtLabel", rtLabel)
+	inputs.property("rtExeName", rtExeName)
+	outputs.dir(runtimePackMeta)
+	doLast {
+		def dir = runtimePackMeta.get().asFile
+		dir.mkdirs()
+		new File(dir, "runtime-pack.json").text = groovy.json.JsonOutput.prettyPrint(
+				groovy.json.JsonOutput.toJson([
+						schemaVersion: 1,
+						engine       : "ollama",
+						id           : "${project.archives_base_name}-runtime-${rtPlatform}",
+						platform     : rtPlatformName,
+						arch         : rtArchName,
+						label        : rtLabel,
+						files        : [
+								props  : "tongyongfanyi/runtime.properties",
+								runtime: "tongyongfanyi/runtime.zip"
+						]
+				])) + "\n"
+		def props = new File(dir, "tongyongfanyi/runtime.properties")
+		props.parentFile.mkdirs()
+		props.text = """id=${project.archives_base_name}-runtime-${rtPlatform}
+platform=${rtPlatformName}
+arch=${rtArchName}
+label=${rtLabel}
+exe=ollama/${rtExeName}
+"""
+	}
+}
+
+def runtimePack = tasks.register("runtimePack", Zip) {
+	dependsOn generateRuntimePackMeta, runtimeZip
+	archiveFileName = "${project.archives_base_name}-runtime-${rtPlatform}.zip"
+	destinationDirectory = layout.buildDirectory.dir("libs")
+	entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
+	from(runtimePackMeta)
+	from(runtimeZip) {
+		rename { "runtime.zip" }
+		into "tongyongfanyi"
+	}
+}
+
+def stagePayload = tasks.register("stagePayload", Sync) {
+	dependsOn stageRuntime
+	onlyIf { variant != null }
+	into layout.buildDirectory.dir("payload-stage")
+	// 每次都从干净的目录开始：Sync 清理旧文件发生在拷贝之后，
+	// 若上一轮把同名文件留成了目录，这一轮会撞上「拒绝访问」。
+	doFirst {
+		delete layout.buildDirectory.dir("payload-stage")
+	}
+	// 运行时直接复用 stageRuntime 的产出（exe + CPU 库 + Vulkan 后端）。
+	// 以前这里复制了一份同样的 from 配置，改平台时两边容易漏，现在只有一处。
+	from(layout.buildDirectory.dir("runtime-stage"))
+	// 模型：manifest + 它引用的全部 blob
+	if (variant != null) {
+		def manifestParent = manifestRel.substring(0, manifestRel.lastIndexOf('/'))
+		def manifestName = manifestRel.substring(manifestRel.lastIndexOf('/') + 1)
+		from(modelsDir.file(manifestRel).asFile.parentFile) {
+			include manifestName
+			into "models/${manifestParent}"
+		}
+		from(modelsDir.dir("blobs")) {
+			include blobNames
+			into "models/blobs"
+		}
+	}
+}
+
+def payloadZip = tasks.register("payloadZip", Zip) {
+	dependsOn stagePayload
+	onlyIf { variant != null }
+	from layout.buildDirectory.dir("payload-stage")
+	archiveFileName = "payload.zip"
+	destinationDirectory = layout.buildDirectory.dir("payload")
+	entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
+}
+
+// 模型包：通用 zip，只有 model-pack.json + model.properties + models.zip。
+// 不含 fabric.mod.json / minecraft 依赖，Fabric、Forge、别的游戏版本都能读同一个包。
+def stageModels = tasks.register("stageModels", Sync) {
+	onlyIf { variant != null }
+	into layout.buildDirectory.dir("models-stage")
+	doFirst {
+		delete layout.buildDirectory.dir("models-stage")
+	}
+	if (variant != null) {
+		def manifestParent = manifestRel.substring(0, manifestRel.lastIndexOf('/'))
+		def manifestName = manifestRel.substring(manifestRel.lastIndexOf('/') + 1)
+		from(modelsDir.file(manifestRel).asFile.parentFile) {
+			include manifestName
+			into "models/${manifestParent}"
+		}
+		from(modelsDir.dir("blobs")) {
+			include blobNames
+			into "models/blobs"
+		}
+	}
+}
+
+def modelsZip = tasks.register("modelsZip", Zip) {
+	dependsOn stageModels
+	onlyIf { variant != null }
+	from layout.buildDirectory.dir("models-stage")
+	archiveFileName = "models.zip"
+	destinationDirectory = layout.buildDirectory.dir("models")
+	entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
+}
+
+def modelPackMeta = layout.buildDirectory.dir("generated/model-pack-meta")
+def generateModelPackMeta = tasks.register("generateModelPackMeta") {
+	onlyIf { variant != null }
+	inputs.property("modelId", variant == null ? "none" : variant.id)
+	inputs.property("modelLabel", variant == null ? "none" : variant.label)
+	inputs.property("suffix", variant == null ? "none" : variant.suffix)
+	outputs.dir(modelPackMeta)
+	doLast {
+		def f = modelPackMeta.get().file("model-pack.json").asFile
+		f.parentFile.mkdirs()
+		f.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([
+			schemaVersion: 1,
+			engine       : "ollama",
+			id           : "tongyongfanyi-model-${variant.suffix}",
+			name         : variant.id,
+			label        : variant.label,
+			files        : [
+				props : "tongyongfanyi/model.properties",
+				models: "tongyongfanyi/models.zip"
+			]
+		]))
+	}
+}
+
+def modelPack = tasks.register("modelPack", Zip) {
+	dependsOn generateModelInfo, generateModelPackMeta, modelsZip
+	onlyIf { variant != null }
+	archiveFileName = "${project.archives_base_name}-model-${variant == null ? 'none' : variant.suffix}.zip"
+	destinationDirectory = layout.buildDirectory.dir("libs")
+	entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
+	from(modelPackMeta)
+	from(generateModelInfo)
+	from(modelsZip) {
+		rename { "models.zip" }
+		into "tongyongfanyi"
+	}
+}
 
 jar {
 	from("LICENSE") {
 		rename { "${it}_${project.base.archivesName.get()}" }
 	}
-
-	if (bundleModel) {
-		def bundledManifest = bundledModelsDir.file("manifests/registry.ollama.ai/library/qwen2.5/0.5b")
-		if (!bundledManifest.asFile.exists()) {
-			throw new GradleException("找不到内置模型 manifest: ${bundledManifest.asFile}\n" +
-					"（模型源文件在 本地模型包/models 下；确实不想打包就用 -PbundleModel=false）")
+	if (variant != null) {
+		// 旧单包模式（兼容）：运行时 + 模型都在代码包里
+		from(payloadZip) {
+			rename { "payload.zip" }
+			into "tongyongfanyi"
 		}
-		bundledBlobDigests.each { digest ->
-			def blob = bundledModelsDir.file("blobs/sha256-${digest}")
-			if (!blob.asFile.exists()) {
-				throw new GradleException("找不到内置模型 blob: ${blob.asFile}\n" +
-						"（模型源文件在 本地模型包/models 下；确实不想打包就用 -PbundleModel=false）")
-			}
-		}
-		into("tongyongfanyi/bundled/${bundledModelName}") {
-			from(bundledManifest) {
-				rename { "manifest.json" }
-			}
-			bundledBlobDigests.each { digest ->
-				from(bundledModelsDir.file("blobs/sha256-${digest}"))
-			}
-		}
-		// 模型是不可压缩的 GGUF：deflate 既慢又几乎省不下空间。
-		// 整包改为 STORED（不压缩），首次安装就是一次纯字节拷贝，构建也不用去压 380MB。
 		entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
+	} else if (embedRuntime) {
+		// 可选的旧行为：运行时也塞进代码包（约 +128 MB）。
+		// 默认不打，代码包保持几 MB；运行时改由独立运行时包提供。
+		from(runtimeZip) {
+			rename { "runtime.zip" }
+			into "tongyongfanyi"
+		}
+		entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.STORED
+	}
+	// else：纯代码包。运行时从 mods/ 里的 tongyongfanyi-runtime-*.zip 读，
+	// 模型从 tongyongfanyi-model-*.zip 读，两个都能按平台/模型自由替换。
+}
+
+// 打发布包前先确认 payload / 运行时真的带上了，避免出一个"能装但不能用"的 jar
+tasks.named("build") {
+	if (variant != null) {
+		dependsOn payloadZip
+	} else if (embedRuntime) {
+		dependsOn runtimeZip
 	}
 }

@@ -13,6 +13,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class ObjectiveMixin {
     @Inject(method = "getDisplayName", at = @At("RETURN"), cancellable = true)
     private void tyfy$translateDisplayName(CallbackInfoReturnable<Component> cir) {
-        cir.setReturnValue(TranslationHelper.translate(cir.getReturnValue()));
+        cir.setReturnValue(TranslationHelper.translateScoreboard(cir.getReturnValue()));
     }
 }

@@ -13,19 +13,18 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 拦截服务器发来的消息进行翻译。
- * 按"样式+文本"逐段翻译，保留原文的颜色、点击事件与悬停信息；
- * 未命中缓存时放行原文（保证可点击），后台翻译完成后下一次直接命中。
- * 只处理「收到」的消息，玩家自己发出的消息不受任何影响。
+ * 拦截服务器发来的消息进行翻译。只处理「收到」的消息，不改任何发包。
  *
- * <p>两条路径分开处理：
- * <ul>
- *   <li>游戏消息（含动作栏）：走 {@code MODIFY_GAME}。该事件的返回值就是最终显示内容，
- *       直接返回译文即可，不需要取消原消息再补发，因此不会丢消息，也不会改变
- *       消息时序、聊天记录与动作栏（overlay）语义。</li>
- *   <li>玩家聊天：Fabric 只提供 {@code ALLOW_CHAT}（没有 MODIFY_CHAT），
- *       命中缓存时取消原消息并立刻补发一条带译文的同款消息。</li>
- * </ul>
+ * <p><b>关键背景（这是聊天栏反复漏翻的根因）</b>：Hypixel 的玩家聊天、NPC 对话、
+ * 区域提示几乎全部是 system message（日志里 {@code [System] [CHAT]}），走的是
+ * {@code MODIFY_GAME}，而不是 {@code ALLOW_CHAT}。旧版 {@code MODIFY_GAME} 只在缓存
+ * 命中时替换、未命中就放行原文，于是只有消息重复出现时才碰巧翻出来；
+ * 给 {@code ALLOW_CHAT} 加补发机制对 Hypixel 完全无效。
+ *
+ * <p>现在两条路径统一：把消息包成 {@link com.tongyongfanyi.translate.BilingualComponent}，
+ * 整句一次送模型；首次显示原文，译文写进缓存后由客户端通知聊天栏重新排版，
+ * 同一条消息原地变成中文 —— 不新增消息、不重复刷屏、不丢消息时序。
+ * 按 O 键可随时切回完全原始的组件（带可点击的 NPC 选项按钮）。
  */
 public class MessageInterceptor {
     private final TranslationManager manager;
@@ -42,18 +41,20 @@ public class MessageInterceptor {
     }
 
     /**
-     * 游戏消息 / 动作栏：命中缓存时替换为译文，否则原样返回并触发后台翻译。
-     * 返回值由 Fabric 写回消息本体，因此无需取消原消息。
+     * 游戏消息（Hypixel 聊天/NPC/系统提示的主力通道）。
+     * 返回值由 Fabric 写回消息本体，因此不需要取消再补发，消息时序与聊天记录都不变。
      */
     public Component modifyGameMessage(Component message, boolean overlay) {
         ModConfig config = manager.config();
-        if (!config.enabled || !config.translateGameMessages) {
+        // reentrant：补发的玩家聊天会再走一次 MODIFY_GAME，别套娃包装。
+        if (!config.enabled || !config.translateGameMessages || reentrant.get()) {
             return message;
         }
-        return TranslationHelper.translateChat(message);
+        // 动作栏每 tick 重发同一条，包装后靠重复刷新自然命中缓存，不会漏翻。
+        return TranslationHelper.wrapChatLine(message);
     }
 
-    /** 聊天消息：只翻译内容本体，保留样式/点击事件；未命中放行原文 */
+    /** 原版玩家聊天：Fabric 没有 MODIFY_CHAT，只能取消原消息后立刻补发包装过的同款消息 */
     private boolean onChatMessage(Component message,
                                   PlayerChatMessage playerChatMessage,
                                   com.mojang.authlib.GameProfile sender,
@@ -64,11 +65,12 @@ public class MessageInterceptor {
             return true;
         }
         Component content = contentComponent(message, playerChatMessage);
-        Component translated = TranslationHelper.translateChat(content);
-        if (translated == content) {
-            return true; // 未命中缓存：原文放行（可点击），后台已开始翻译
+        Component wrapped = TranslationHelper.wrapChatLine(content);
+        if (wrapped == content) {
+            // 纯中文 / 纯符号 / 不值得翻：直接放行，别无谓地压住消息
+            return true;
         }
-        reAddChatMessage(translated, boundChatType);
+        reAddChatMessage(wrapped, boundChatType);
         return false;
     }
 

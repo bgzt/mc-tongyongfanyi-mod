@@ -2,9 +2,6 @@ package com.tongyongfanyi.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -13,6 +10,10 @@ import java.nio.file.Path;
 
 /**
  * 配置读写。配置文件位于 config/tongyongfanyi.json。
+ *
+ * <p>1.5.0 换了配置结构（去掉模型相关字段，新增源语言/目标语言/设备）。
+ * Gson 读旧文件时对多出来的键是忽略的，缺失的新键用字段默认值补上，
+ * 所以不需要迁移代码——旧配置能直接读，保存一次就变成新结构。
  */
 public class ConfigManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -25,14 +26,9 @@ public class ConfigManager {
     public ModConfig load() {
         if (Files.exists(path)) {
             try {
-                JsonObject root = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
-                boolean changed = migrate(root);
-                ModConfig config = GSON.fromJson(root, ModConfig.class);
+                ModConfig config = GSON.fromJson(Files.readString(path), ModConfig.class);
                 if (config != null) {
-                    if (changed) {
-                        // 迁移后立刻按新结构写回，避免每次启动都重复迁移
-                        save(config);
-                    }
+                    sanitize(config);
                     return config;
                 }
             } catch (Exception e) {
@@ -44,48 +40,41 @@ public class ConfigManager {
         return defaults;
     }
 
-    /**
-     * 把旧版本配置迁移到当前结构。
-     *
-     * 旧版本用 backends.local.{model,url} 存本地模型参数，另有一个 backend 字段用于选后端；
-     * 现在只剩「本地模型」一种翻译方式，因此这里把模型名和服务地址搬到 localModel 下，
-     * 并丢掉已经没有意义的 backend / backends 节点。
-     * 这样做是为了不把用户已选好的模型（比如 HY-MT-1.8B）静默重置成默认的 qwen2.5:0.5b。
-     *
-     * @return 是否发生了改动（需要写回文件）
-     */
-    static boolean migrate(JsonObject root) {
-        boolean changed = false;
-
-        if (root.remove("backend") != null) {
-            changed = true;
+    /** 兜住手工改坏的值，避免界面/请求因为一个非法字段直接崩掉 */
+    private static void sanitize(ModConfig config) {
+        if (!Languages.ids(Languages.SOURCES).contains(config.sourceLanguage)) {
+            config.sourceLanguage = "auto";
         }
-
-        JsonElement backends = root.get("backends");
-        if (backends != null && backends.isJsonObject()) {
-            JsonObject legacy = backends.getAsJsonObject();
-            JsonElement local = legacy.get("local");
-            if (local != null && local.isJsonObject()) {
-                JsonObject src = local.getAsJsonObject();
-                JsonObject target = root.has("localModel") && root.get("localModel").isJsonObject()
-                        ? root.getAsJsonObject("localModel")
-                        : new JsonObject();
-                copyStringIfPresent(src, target, "model");
-                copyStringIfPresent(src, target, "url");
-                root.add("localModel", target);
-            }
-            root.remove("backends");
-            changed = true;
+        if (!Languages.ids(Languages.TARGETS).contains(config.targetLanguage)) {
+            config.targetLanguage = "zh-CN";
         }
-        return changed;
+        if (!"auto".equals(config.device) && !"gpu".equals(config.device) && !"cpu".equals(config.device)) {
+            config.device = "auto";
+        }
+        if (config.translationThreads < 1 || config.translationThreads > 8) {
+            config.translationThreads = 1;
+        }
+        // API 并发和本地的上限不同：云端不受显存限制，允许开到 16
+        if (config.apiThreads < 1 || config.apiThreads > 16) {
+            config.apiThreads = 6;
+        }
+        if (config.timeoutMs < 1000 || config.timeoutMs > 60000) {
+            config.timeoutMs = 20000;
+        }
+        if (config.cacheSize < 128) {
+            config.cacheSize = 2048;
+        }
+        // 优先级只能是 1~6（1 最优先），手工改坏了就回到各自默认档
+        config.priorityChat = level(config.priorityChat, 1);
+        config.priorityTooltip = level(config.priorityTooltip, 2);
+        config.priorityScoreboard = level(config.priorityScoreboard, 3);
+        config.priorityScreen = level(config.priorityScreen, 4);
+        config.priorityHud = level(config.priorityHud, 5);
+        config.priorityItemList = level(config.priorityItemList, 6);
     }
 
-    /** 仅当来源里存在非空的字符串值时才复制，避免用空值覆盖新配置里的已有设置 */
-    private static void copyStringIfPresent(JsonObject from, JsonObject to, String key) {
-        JsonElement value = from.get(key);
-        if (value != null && value.isJsonPrimitive() && !value.getAsString().isBlank()) {
-            to.add(key, value);
-        }
+    private static int level(int value, int fallback) {
+        return value < 1 || value > 6 ? fallback : value;
     }
 
     public void save(ModConfig config) {

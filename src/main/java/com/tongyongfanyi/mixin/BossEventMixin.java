@@ -13,6 +13,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BossEventMixin {
     @Inject(method = "getName", at = @At("RETURN"), cancellable = true)
     private void tyfy$translateName(CallbackInfoReturnable<Component> cir) {
-        cir.setReturnValue(TranslationHelper.translate(cir.getReturnValue()));
+        cir.setReturnValue(TranslationHelper.translateHud(cir.getReturnValue()));
     }
 }

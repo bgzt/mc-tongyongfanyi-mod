@@ -13,7 +13,9 @@ public class ModMenuIntegration implements ModMenuApi {
     public ConfigScreenFactory<?> getModConfigScreenFactory() {
         return parent -> {
             TongyongfanyiClient mod = TongyongfanyiClient.getInstance();
-            return new SettingsScreen(mod.getConfig(), mod.getConfigManager(), mod.getTranslationManager());
+            // 把 ModMenu 传进来的模组列表界面记为父界面，点「完成」或 Esc 能回到列表
+            return new SettingsScreen(mod.getConfig(), mod.getConfigManager(),
+                    mod.getTranslationManager(), parent);
         };
     }
 }

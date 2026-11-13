@@ -2,6 +2,7 @@ package com.tongyongfanyi.config;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
@@ -21,6 +22,14 @@ import java.util.Map;
 public abstract class BaseSettingsScreen extends Screen {
     /** 内容左边缘到屏幕左边缘的固定边距 */
     private static final int CONTENT_MARGIN = 110;
+    /** 底部固定「完成」按钮占用的高度：滚动内容不能画进这块区域 */
+    private static final int FOOTER_H = 36;
+    private static final int DONE_W = 200;
+    private static final int DONE_H = 20;
+
+    /** 两列布局：单列宽度、列间距。窗口太窄时自动退回单列 */
+    protected static final int COL_W = 230;
+    protected static final int COL_GAP = 16;
 
     protected int baseY = 40;
     protected int scrollOffset = 0;
@@ -30,6 +39,11 @@ public abstract class BaseSettingsScreen extends Screen {
     protected final List<LabelPos> fieldLabels = new ArrayList<>();
     protected final List<LabelPos> sectionHeaders = new ArrayList<>();
 
+    /** 打开本设置页的界面；关闭时回到它（ModMenu 列表 / 暂停菜单 / 聊天栏） */
+    private final Screen parent;
+    /** 底部固定的「完成」按钮，不随内容滚动 */
+    private Button doneButton;
+
     protected record LabelPos(String text, int y) {
     }
 
@@ -37,7 +51,17 @@ public abstract class BaseSettingsScreen extends Screen {
     }
 
     protected BaseSettingsScreen(Component title) {
+        this(title, null);
+    }
+
+    protected BaseSettingsScreen(Component title, Screen parent) {
         super(title);
+        this.parent = parent;
+    }
+
+    /** 重建设置页（切换界面语言时）要沿用同一个父界面 */
+    protected Screen parentScreen() {
+        return parent;
     }
 
     @Override
@@ -49,14 +73,37 @@ public abstract class BaseSettingsScreen extends Screen {
         sectionHeaders.clear();
         widgetBase.clear();
         rebuild();
+        // 和原版选项子页面一样，底部居中放一个不参与滚动的「完成」按钮
+        doneButton = Button.builder(I18n.c("button.done"), btn -> onDone())
+                .bounds(width / 2 - DONE_W / 2, height - 27, DONE_W, DONE_H)
+                .build();
+        addRenderableWidget(doneButton);
         scrollOffset = 0;
-        maxScroll = Math.max(0, baseY + 30 - height);
+        maxScroll = Math.max(0, baseY + 30 - height + FOOTER_H);
         for (GuiEventListener child : children()) {
             if (child instanceof AbstractWidget w) {
                 widgetBase.put(w, new WidgetBase(w.getX(), w.getY()));
             }
         }
         applyScroll();
+    }
+
+    /**
+     * 底部「完成」按钮的动作。默认等同关闭；主设置页会覆写成「提交草稿」，
+     * 以便和 Esc（取消）区分开 —— 玩家要求「没点完成就不要生效」。
+     */
+    protected void onDone() {
+        onClose();
+    }
+
+    /** 关闭时回到打开它的界面；没记父界面时按原版行为直接回游戏 */
+    @Override
+    public void onClose() {
+        if (parent != null && this.minecraft != null) {
+            this.minecraft.setScreenAndShow(parent);
+        } else {
+            super.onClose();
+        }
     }
 
     /** 子类在此构建控件 */
@@ -82,6 +129,19 @@ public abstract class BaseSettingsScreen extends Screen {
         return Math.max(2, Math.min(width / 2 - CONTENT_MARGIN, Math.max(2, width - 224)));
     }
 
+    /** 当前窗口能放几列：够宽就两列，窄窗口退回单列，避免右列被切掉 */
+    protected int columns() {
+        return width >= 2 * COL_W + COL_GAP + 40 ? 2 : 1;
+    }
+
+    /** 第 col 列的左边缘（整体居中对齐，和原版设置页一样居中） */
+    protected int columnX(int col) {
+        int cols = columns();
+        int total = cols * COL_W + (cols - 1) * COL_GAP;
+        int start = Math.max(4, (width - total) / 2);
+        return start + Math.max(0, Math.min(col, cols - 1)) * (COL_W + COL_GAP);
+    }
+
     /**
      * 按当前 {@link #scrollOffset} 重新摆放控件，并隐藏离开可视区的控件。
      *
@@ -97,21 +157,27 @@ public abstract class BaseSettingsScreen extends Screen {
      * 所以把 visible 置 false 就能彻底避免这次绘制（同时也自动禁用点击）。
      */
     private void applyScroll() {
-        int dx = contentX() - (width / 2 - CONTENT_MARGIN);
+        // 两列整体居中，不需要横向补偿；只有窄屏单列才把内容往左推
+        int dx = columns() == 1 ? contentX() - (width / 2 - CONTENT_MARGIN) : 0;
         for (Map.Entry<AbstractWidget, WidgetBase> e : widgetBase.entrySet()) {
             AbstractWidget w = e.getKey();
+            if (w == doneButton) {
+                // 底部「完成」按钮固定在原位，不参与滚动，也不能被 visible 判定隐藏
+                w.visible = true;
+                continue;
+            }
             int y = e.getValue().y() - scrollOffset;
             w.setY(y);
             w.setX(Math.max(0, Math.min(e.getValue().x() + dx, Math.max(0, width - w.getWidth()))));
-            // 只允许「完整落在可视区内」的控件参与绘制：上沿越界会崩，下沿越界虽然安全，
-            // 但会被画到页脚下面，一并隐藏更干净。
-            w.visible = y >= 0 && y + w.getHeight() <= height;
+            // 只允许「完整落在可视区内」的控件参与绘制：上沿越界会崩，下沿会画到
+            // 页脚和「完成」按钮上，所以把下界收紧到 height - FOOTER_H。
+            w.visible = y >= 0 && y + w.getHeight() <= height - FOOTER_H;
         }
     }
 
-    /** 该行文字在屏幕上是否可见（文字绘制不会触发裁剪，但画到屏幕外白费且会压住页脚） */
+    /** 该行文字在屏幕上是否可见（同样要让出底部「完成」按钮区域，避免文字盖在按钮上） */
     private boolean onScreen(int y) {
-        return y >= 0 && y + 9 <= height;
+        return y >= 0 && y + 9 <= height - FOOTER_H;
     }
 
     @Override
@@ -119,24 +185,130 @@ public abstract class BaseSettingsScreen extends Screen {
         // 26.2 中背景由 extractRenderStateWithTooltipAndSubtitles 在调用本方法前统一绘制，
         // 这里不能再调 extractBackground，否则同一帧会模糊两次直接崩溃。
         super.extractRenderState(graphics, mouseX, mouseY, delta);
-        graphics.centeredText(font, this.title, width / 2, 15, 0xFFFFFF);
-        int x = contentX();
+        graphics.centeredText(font, this.title, width / 2, 15, 0xFFFFFFFF);
+        int x = columnX(0);
         for (LabelPos h : sectionHeaders) {
             int y = h.y() - scrollOffset;
             if (onScreen(y)) {
-                graphics.text(font, h.text(), x, y, 0xFFFFA0);
+                graphics.text(font, h.text(), x, y, 0xFFFFFFA0);
             }
         }
         for (LabelPos l : fieldLabels) {
             int y = l.y() - scrollOffset;
             if (onScreen(y)) {
-                graphics.text(font, l.text(), x, y, 0xAAAAAA);
+                graphics.text(font, l.text(), x, y, 0xFFAAAAAA);
             }
         }
         if (maxScroll > 0) {
-            graphics.text(font, "滚轮滚动查看更多", x, height - 10, 0x808080);
+            // 底部让给固定的「完成」按钮，页脚文字整体上移
+            graphics.text(font, I18n.t("scroll.hint"), x, height - 46, 0xFF808080);
         }
         extractFooter(graphics, x);
+        drawScrollbar(graphics);
+    }
+
+    // ------------------------------------------------------------------
+    // 右侧滚动条
+    // ------------------------------------------------------------------
+    // 只有滚轮能滚时玩家常常不知道下面还有内容；26.2 的原版列表都有可见滚动条，
+    // 这里补一个一致的：可点轨道跳转、可拖滑块。
+
+    private static final int BAR_W = 6;
+    private static final int BAR_MARGIN = 6;
+    /** 正在拖滚动条：拖动期间不把点击事件传给下面的控件 */
+    private boolean draggingBar;
+
+    private int barX() {
+        return width - BAR_MARGIN - BAR_W;
+    }
+
+    private int barTop() {
+        return 30;
+    }
+
+    private int barBottom() {
+        return height - FOOTER_H - 6;
+    }
+
+    private int barTrackH() {
+        return Math.max(1, barBottom() - barTop());
+    }
+
+    private int barThumbH() {
+        int track = barTrackH();
+        if (maxScroll <= 0) {
+            return track;
+        }
+        return Math.max(24, (int) ((long) track * track / (track + maxScroll)));
+    }
+
+    private int barThumbY() {
+        int travel = barTrackH() - barThumbH();
+        if (maxScroll <= 0 || travel <= 0) {
+            return barTop();
+        }
+        return barTop() + (int) ((long) travel * scrollOffset / maxScroll);
+    }
+
+    private void drawScrollbar(GuiGraphicsExtractor g) {
+        if (maxScroll <= 0) {
+            return;   // 内容装得下就不画，免得看着像"还有东西没显示"
+        }
+        int x = barX();
+        int top = barTop();
+        int bottom = barBottom();
+        g.fill(x, top, x + BAR_W, bottom, 0x30FFFFFF);
+        int ty = barThumbY();
+        int th = barThumbH();
+        g.fill(x, ty, x + BAR_W, ty + th, 0xB0FFFFFF);
+    }
+
+    /** 点/拖滚动条：把鼠标 y 换算成滚动位置，滑块中心跟随鼠标 */
+    private void scrollFromBar(double mouseY) {
+        int travel = barTrackH() - barThumbH();
+        if (travel <= 0) {
+            return;
+        }
+        double ratio = (mouseY - barTop() - barThumbH() / 2.0) / travel;
+        ratio = Math.max(0.0, Math.min(1.0, ratio));
+        int newOffset = (int) Math.round(ratio * maxScroll);
+        if (newOffset != scrollOffset) {
+            scrollOffset = newOffset;
+            applyScroll();
+        }
+    }
+
+    private boolean inBar(double mouseX, double mouseY) {
+        return maxScroll > 0 && mouseX >= barX() - 2 && mouseX <= barX() + BAR_W + 2
+                && mouseY >= barTop() && mouseY <= barBottom();
+    }
+
+    @Override
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+        if (inBar(event.x(), event.y())) {
+            draggingBar = true;
+            scrollFromBar(event.y());
+            return true;
+        }
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
+    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double dragX, double dragY) {
+        if (draggingBar) {
+            scrollFromBar(event.y());
+            return true;
+        }
+        return super.mouseDragged(event, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
+        if (draggingBar) {
+            draggingBar = false;
+            return true;
+        }
+        return super.mouseReleased(event);
     }
 
     /** 子类可在底部追加状态文字 */
@@ -174,8 +346,12 @@ public abstract class BaseSettingsScreen extends Screen {
         return java.util.Optional.empty();
     }
 
+    /**
+     * 从暂停菜单进来时保持「暂停界面」语义（背景暗化、单人世界继续暂停），
+     * 从 ModMenu / 聊天栏进来时沿用父界面的设定 —— 两个入口的观感因此一致。
+     */
     @Override
     public boolean isPauseScreen() {
-        return false;
+        return parent != null && parent.isPauseScreen();
     }
 }

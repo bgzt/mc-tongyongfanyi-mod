@@ -12,6 +12,6 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 public abstract class TextDisplayRendererMixin {
     @ModifyVariable(method = "splitLines", at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private Component tyfy$translateText(Component text) {
-        return TranslationHelper.translate(text);
+        return TranslationHelper.translateHud(text);
     }
 }

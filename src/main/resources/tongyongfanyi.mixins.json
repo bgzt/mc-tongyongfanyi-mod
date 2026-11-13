@@ -6,13 +6,16 @@
     "ItemStackMixin",
     "BossEventMixin",
     "EntityRendererMixin",
+    "FontPrepareTextMixin",
     "GuiGraphicsTextMixin",
     "HudMixin",
     "ObjectiveMixin",
-    "PlayerScoreEntryMixin",
     "PlayerTeamMixin",
-    "SelectedItemNameMixin",
-    "TextDisplayRendererMixin"
+    "TextDisplayRendererMixin",
+    "SignTextMixin",
+    "BookViewScreenMixin",
+    "PauseScreenMixin",
+    "ChatComponentAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

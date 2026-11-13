@@ -3,12 +3,17 @@
   "id": "tongyongfanyi",
   "version": "${version}",
   "name": "通用翻译 Together",
-  "description": "将 Hypixel 等服务器发来的英文消息自动翻译成中文，发给服务器的消息保持不变。使用本机部署的翻译模型（Ollama）离线翻译，不上传任何内容；内置本地磁盘缓存，可通过 ModMenu 或在游戏内输入 /tyfy 打开设置界面。",
+  "description": "将 Hypixel 等服务器发来的英文消息自动翻译成中文；只改客户端显示，发给服务器的消息一个字节都不动。翻译范围覆盖聊天、物品提示、Boss 栏、计分板、标题与悬浮文字，内置磁盘缓存与本地词表。翻译后端二选一：在线 API（OpenAI 兼容，DeepSeek / MiMo 等）或本机 Ollama 离线模型。输入 /tyfy 打开设置界面。",
   "authors": [
-    "you"
+    "不过天",
+    "Deepseek"
   ],
-  "contact": {},
-  "license": "MIT",
+  "contact": {
+    "homepage": "https://github.com/bgzt/mc-tongyongfanyi-mod",
+    "issues": "https://github.com/bgzt/mc-tongyongfanyi-mod/issues",
+    "sources": "https://github.com/bgzt/mc-tongyongfanyi-mod"
+  },
+  "license": "Apache-2.0",
   "environment": "client",
   "mixins": [
     "tongyongfanyi.mixins.json"
@@ -26,8 +31,8 @@
   },
   "depends": {
     "fabricloader": ">=0.19.3",
-    "minecraft": "~26.3",
+    "minecraft": "~${mcDep}",
     "java": ">=25",
-    "fabric-api": ">=0.161.0"
+    "fabric-api": ">=${apiDep}"
   }
 }
