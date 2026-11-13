@@ -40,7 +40,7 @@
 | 包 | 文件 | 版本要求 | 下载 |
 |---|---|---|---|
 | **代码包** | `tongyongfanyi-mc26.2-1.5.0.jar` | Minecraft **26.2** | [Releases v1.5.0](https://github.com/bgzt/mc-tongyongfanyi-mod/releases/tag/v1.5.0) |
-| **代码包** | `tongyongfanyi-1.5.0.jar` | Minecraft **26.3** | [Releases v1.5.0](https://github.com/bgzt/mc-tongyongfanyi-mod/releases/tag/v1.5.0) |
+| **代码包** | `tongyongfanyi-mc26.3-1.5.0.jar` | Minecraft **26.3** | [Releases v1.5.0](https://github.com/bgzt/mc-tongyongfanyi-mod/releases/tag/v1.5.0) |
 | **运行时包** | `tongyongfanyi-runtime-windows-x64.zip` | 无要求，跨版本通用 | 同上 |
 | **模型包** | `tongyongfanyi-model-*.zip` | 无要求，跨版本通用 | [模型包仓库](https://github.com/bgzt/mc-tongyongfanyi-models/releases) |
 
@@ -93,7 +93,7 @@
 需要 **JDK 25**（构建脚本固定 `--release 25`）：
 
 ```bash
-# 快速验证（不内置任何包，产出 26.3 代码包）
+# 快速验证（不内置任何包，产出 26.3 代码包，文件名带 -mc26.3）
 ./gradlew build -Pbundle=none
 
 # 26.2 代码包

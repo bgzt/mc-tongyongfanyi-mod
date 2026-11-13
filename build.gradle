@@ -36,7 +36,8 @@ def variant = bundle == "none" ? null : variants[bundle]
 def mcVersion = (project.findProperty("mcver") ?: project.minecraft_version).toString()
 def apiVersion = (project.findProperty("apiVersion") ?: project.fabric_api_version).toString()
 def modmenuVersion = (project.findProperty("modmenuVersion") ?: project.modmenu_version).toString()
-def archiveSuffix = (project.findProperty("archiveSuffix") ?: "").toString()
+// 默认后缀带 MC 版本号，Release 上 26.2 / 26.3 一眼可分；打 26.2 时显式传 -mc26.2
+def archiveSuffix = (project.findProperty("archiveSuffix") ?: "-mc26.3").toString()
 // fabric.mod.json 里声明的 fabric-api 版本下限。默认跟构建用的版本一致（去掉 +mc 后缀），
 // 给老版本打包时可以单独指定，免得因为「依赖版本写高了」被加载器直接拒掉。
 def apiDep = (project.findProperty("apiDep") ?: "0.161.0").toString().split("\\+")[0]
