@@ -113,7 +113,7 @@
 
 ## License
 
-本项目代码以 [Apache-2.0](LICENSE) 开源。
+本项目代码以 [GPL-3.0](LICENSE)（GNU 通用公共许可证第 3 版）开源。
 
-模型包仓库 [bgzt/mc-tongyongfanyi-models](https://github.com/bgzt/mc-tongyongfanyi-models)：
+模型包仓库 [bgzt/mc-tongyongfanyi-models](https://github.com/bgzt/mc-tongyongfanyi-models) 单独遵循 Apache-2.0：
 Qwen3.5 系列模型遵循其官方 **Apache-2.0** 协议；混元 HY-MT2 模型遵循腾讯混元自身的模型协议，使用前请自行查阅。
