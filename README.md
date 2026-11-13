@@ -55,10 +55,10 @@
 
 | 文件 | 模型 | 体积 | 特点 |
 |---|---|---|---|
-| `tongyongfanyi-model-qwen35-q4.zip` | Qwen3.5 0.8B Q4 | 约 517 MB | 速度快，显存占用最小 |
-| `tongyongfanyi-model-qwen35-q3.zip` | Qwen3.5 0.8B Q3_K_M | 约 448 MB | 更省显存，质量略降 |
-| `tongyongfanyi-model-qwen35-2b-q4.zip` | Qwen3.5 2B Q4 | 约 1.2 GB | 质量更好 |
-| `tongyongfanyi-model-hymt2-q4.zip` | 混元 HY-MT2 1.8B Q4 | 约 1.4 GB | 腾讯混元翻译专用模型，英译中效果好 |
+| `tongyongfanyi-model-qwen35-q3.zip` | Qwen3.5 0.8B Q3_K_M | 约 448 MB，显存/内存占用通常小于1G |（低） 更省显存，速度最快，质量较差 |
+| `tongyongfanyi-model-qwen35-q4.zip` | Qwen3.5 0.8B Q4 | 约 517 MB，显存/内存占用通常小于1G | （中）速度快，显存占用小 |
+| `tongyongfanyi-model-qwen35-2b-q4.zip` | Qwen3.5 2B Q4 | 约 1.2 GB，显存/内存占用大于1G | （高）质量更好|
+| `tongyongfanyi-model-hymt2-q4.zip` | 混元 HY-MT2 1.8B Q4 | 约 1.4 GB，显存/内存占用大于1.5G | （高）腾讯混元翻译专用模型，英译中效果好 |
 
 上下文窗口统一 1536；本地模型闲置 10 分钟自动释放显存。
 
