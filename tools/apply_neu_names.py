@@ -4,8 +4,9 @@
 config/tongyongfanyi_cache.json，游戏运行中写入会被它覆盖掉。
 
 用法：
-    python tools/apply_neu_names.py           # 默认写 versions/26.2-Fabric
-    python tools/apply_neu_names.py --check   # 只检查游戏是否已退出，不写
+    python tools/apply_neu_names.py                       # 自动找 .minecraft/versions 下的实例
+    python tools/apply_neu_names.py --instance <实例目录>   # 指定某个版本实例
+    python tools/apply_neu_names.py --check               # 只检查游戏是否已退出，不写
 """
 import argparse
 import json
@@ -18,9 +19,33 @@ import time
 NUM = re.compile(r"\d+(?:[.,]\d+)*(?:[kKmMbB]?)")
 PREFIX = "auto>zh-CN|"
 
-INSTANCES = [
-    r"C:\Users\bgzt1\AppData\Roaming\.minecraft\versions\26.2-Fabric",
-]
+
+def discover_instances():
+    """找本机 .minecraft/versions 下的所有版本实例（也可用 --dir 或 TYFY_INSTANCES 指定）。"""
+    env = os.environ.get("TYFY_INSTANCES")
+    if env:
+        return [p for p in env.split(os.pathsep) if p]
+    roots = [
+        os.path.join(os.environ.get("APPDATA", ""), ".minecraft", "versions"),
+        os.path.expanduser("~/.minecraft/versions"),
+    ]
+    found = []
+    with_mod = []
+    for root in roots:
+        if root and os.path.isdir(root):
+            for name in sorted(os.listdir(root)):
+                path = os.path.join(root, name)
+                if not os.path.isdir(os.path.join(path, "config")):
+                    continue
+                # 优先挑真的装了本模组（有缓存文件）的实例
+                if os.path.isfile(os.path.join(path, "config", "tongyongfanyi_cache.json")):
+                    with_mod.append(path)
+                else:
+                    found.append(path)
+    return with_mod + found
+
+
+INSTANCES = discover_instances()
 
 
 def norm(s):
@@ -41,9 +66,13 @@ def game_running():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", default="neu_names.json")
-    ap.add_argument("--instance", default=INSTANCES[0])
+    ap.add_argument("--instance", default=None, help="版本实例目录，默认取自动探测到的第一个")
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
+    if args.instance is None:
+        if not INSTANCES:
+            sys.exit("没找到 .minecraft/versions 下的实例，请用 --instance <实例目录> 指定")
+        args.instance = INSTANCES[0]
 
     if game_running():
         print("游戏还在运行，退出后再执行（否则写进去会被游戏覆盖）")
